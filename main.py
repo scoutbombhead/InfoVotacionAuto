@@ -7,10 +7,43 @@ from PIL import ImageGrab, ImageOps
 import pytesseract
 import re
 import os
+import sys
+import logging
+from datetime import datetime
 
 # Global configuration
 EXE_PATH = r"C:\InfoVotantes\InfoVotantes.exe"
-EXCEL_FILE_PATH = os.path.join(os.path.dirname(__file__), "InfoVotantes.xlsx")
+
+def get_app_dir():
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+# Configure logging - output to both console and file
+LOG_FILE_PATH = os.path.join(get_app_dir(), f"infovotantes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+
+# Create logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Create formatters
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%H:%M:%S')
+
+# Console handler
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(formatter)
+
+# File handler
+file_handler = logging.FileHandler(LOG_FILE_PATH, encoding='utf-8')
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(formatter)
+
+# Add handlers to logger
+logger.addHandler(console_handler)
+logger.addHandler(file_handler)
+
+EXCEL_FILE_PATH = os.path.join(get_app_dir(), "InfoVotantes.xlsx")
 CEDULA = "1117512408"
 
 # Region coordinates for the result area (x, y, width, height)
@@ -29,15 +62,15 @@ def run_exe():
     Returns the subprocess object for later interaction if needed.
     """
     try:
-        print(f"Launching application...")
+        logger.info("Launching InfoVotantes application...")
         process = subprocess.Popen(EXE_PATH)
         time.sleep(2)
         return process
     except FileNotFoundError:
-        print(f"Error: Executable not found at {EXE_PATH}")
+        logger.error(f"Executable not found at {EXE_PATH}")
         return None
     except Exception as e:
-        print(f"Error launching application: {e}")
+        logger.error(f"Error launching application: {e}")
         return None
 
 
@@ -61,7 +94,7 @@ def extract_text_from_screen(x=0, y=0, width=None, height=None):
         text = pytesseract.image_to_string(preprocessed)
         return text.strip()
     except Exception as e:
-        print(f"Error extracting text from screen: {e}")
+        logger.error(f"Error extracting text from screen: {e}")
         return ""
 
 
@@ -72,12 +105,6 @@ def parse_voting_info(raw_text):
     """
     lines = [line.strip() for line in raw_text.split('\n') if line.strip()]
 
-    # Debug: Print lines after empty line removal
-    print("\n=== LINES AFTER EMPTY LINE REMOVAL ===")
-    for idx, line in enumerate(lines):
-        print(f"  [{idx}] '{line}'")
-    print("======================================\n")
-    
     # Post-processing: Fix common OCR errors
     if len(lines) >= 3:
         # Fix Line 2 (Zona): "0" often interpreted as "i¢)"
@@ -88,12 +115,6 @@ def parse_voting_info(raw_text):
         zona_digits = re.findall(r"\d+", lines[2])
         if zona_digits:
             lines[2] = zona_digits[0]
-
-    # Debug: Print lines after post-processing
-    print("=== LINES AFTER POST-PROCESSING ===")
-    for idx, line in enumerate(lines):
-        print(f"  [{idx}] '{line}'")
-    print("===================================\n")
 
     result = {
         'Departamento': '',
@@ -208,8 +229,6 @@ def enter_cedula_and_search(cedula):
     Then reads the results using OCR and returns to the cedula input page.
     """
     try:
-        print(f"Pasting cedula: {cedula}")
-
         # Copy to clipboard and paste
         pyperclip.copy(cedula)
         time.sleep(0.5)
@@ -217,35 +236,24 @@ def enter_cedula_and_search(cedula):
         time.sleep(1)
 
         # Press Enter to search
-        print("Searching...")
         pyautogui.press('enter')
         time.sleep(4)  # Wait for search results to load
 
         # Extract text from results using OCR
-        print("Reading results...")
         result_text = capture_result_text_with_retry(RESULT_REGION, retries=2, delay_seconds=1.5)
-        
-        # Print raw OCR output
-        print("\n=== RAW OCR OUTPUT ===")
-        print(result_text)
-        print("======================\n")
         
         # Parse and print formatted output
         parsed_result = parse_voting_info(result_text)
         formatted_result = format_voting_info(parsed_result)
-        print("=== FORMATTED OUTPUT ===")
-        print(formatted_result)
-        print("========================\n")
+        logger.info(f"\nResult:\n{formatted_result}\n")
 
         # Press Enter again to go back to cedula input page
-        print("Returning to input page...")
         pyautogui.press('enter')
         time.sleep(2)  # Wait for page to load
 
-        print(f"Completed cedula: {cedula}")
         return parsed_result
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error processing cedula {cedula}: {e}")
         return None
 
 
@@ -255,7 +263,7 @@ def read_cedulas_from_excel():
     Returns a list of cedula values.
     """
     try:
-        print(f"Reading cedulas from {EXCEL_FILE_PATH}")
+        logger.info(f"Reading cedulas from {EXCEL_FILE_PATH}")
         workbook = load_workbook(EXCEL_FILE_PATH)
         worksheet = workbook.active
 
@@ -268,13 +276,13 @@ def read_cedulas_from_excel():
             cedulas.append(str(cell_value).strip())
             row += 1
 
-        print(f"Found {len(cedulas)} cedulas")
+        logger.info(f"Found {len(cedulas)} cedulas")
         return cedulas
     except FileNotFoundError:
-        print(f"Error: Excel file not found at {EXCEL_FILE_PATH}")
+        logger.error(f"Excel file not found at {EXCEL_FILE_PATH}")
         return []
     except Exception as e:
-        print(f"Error reading Excel file: {e}")
+        logger.error(f"Error reading Excel file: {e}")
         return []
 
 
@@ -295,10 +303,9 @@ def write_voting_data_to_excel(row_number, voting_data):
         worksheet[f'G{row_number}'] = voting_data['Direccion']
         
         workbook.save(EXCEL_FILE_PATH)
-        print(f"✓ Data written to Excel row {row_number}")
         return True
     except Exception as e:
-        print(f"Error writing to Excel row {row_number}: {e}")
+        logger.error(f"Error writing to Excel row {row_number}: {e}")
         return False
 
 
@@ -306,12 +313,15 @@ def main():
     """
     Main function to orchestrate the automation workflow.
     """
-    print("Starting InfoVotantes automation...")
+    logger.info("=" * 50)
+    logger.info("InfoVotantes Automation Started")
+    logger.info(f"Log file: {LOG_FILE_PATH}")
+    logger.info("=" * 50)
 
     # Step 1: Read cedulas from Excel
     cedulas = read_cedulas_from_excel()
     if not cedulas:
-        print("No cedulas found. Exiting.")
+        logger.error("No cedulas found. Exiting.")
         return
 
     # Step 2: Run the exe
@@ -324,20 +334,26 @@ def main():
         # Step 3: Process each cedula
         total_cedulas = len(cedulas)
         for index, cedula in enumerate(cedulas, 1):
-            print(f"\nProcessing cedula {index} of {total_cedulas}")
+            logger.info(f"\n{'='*50}")
+            logger.info(f"Processing cedula {index} of {total_cedulas}: {cedula}")
+            logger.info(f"{'='*50}")
             voting_data = enter_cedula_and_search(cedula)
             
             # Write data to Excel (row starts at 2, so row_number = index + 1)
             if voting_data:
                 write_voting_data_to_excel(index + 1, voting_data)
+                formatted_output = format_voting_info(voting_data)
+                logger.info(f"\nResult:\n{formatted_output}\n")
             else:
-                print(f"⚠ No data returned for cedula {cedula}")
+                logger.warning(f"No data returned for cedula {cedula}")
 
             time.sleep(2)  # Wait between searches
 
-        print("\nAll cedulas processed")
+        logger.info("=" * 50)
+        logger.info(f"All {total_cedulas} cedulas processed successfully")
+        logger.info("=" * 50)
     else:
-        print("Failed to launch application. Exiting.")
+        logger.error("Failed to launch application. Exiting.")
 
 
 if __name__ == '__main__':
