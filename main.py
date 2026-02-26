@@ -6,10 +6,11 @@ from openpyxl import load_workbook
 from PIL import ImageGrab, ImageOps
 import pytesseract
 import re
+import os
 
 # Global configuration
 EXE_PATH = r"C:\InfoVotantes\InfoVotantes.exe"
-EXCEL_FILE_PATH = r"C:\Users\sauda\PycharmProjects\InfoVotacionAuto\InfoVotantes.xlsx"
+EXCEL_FILE_PATH = os.path.join(os.path.dirname(__file__), "InfoVotantes.xlsx")
 CEDULA = "1117512408"
 
 # Region coordinates for the result area (x, y, width, height)
