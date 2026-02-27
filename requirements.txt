@@ -1,0 +1,17 @@
+# InfoVotacion Auto - Python Dependencies
+
+# GUI Automation
+pyautogui==0.9.54
+pygetwindow==0.0.9
+pyperclip==1.8.2
+
+# OCR (Optical Character Recognition)
+pytesseract==0.3.10
+Pillow==10.0.0
+
+# Excel file handling
+openpyxl==3.1.2
+
+# Note: Tesseract OCR engine must be installed separately
+# Download from: https://github.com/UB-Mannheim/tesseract/wiki
+# Install to: C:\Program Files\Tesseract-OCR

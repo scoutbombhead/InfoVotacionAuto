@@ -10,6 +10,11 @@ import os
 import sys
 import logging
 from datetime import datetime
+import configparser
+
+# Configure pytesseract to find tesseract
+# This is required for pytesseract to work properly
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 # Global configuration
 EXE_PATH = r"C:\InfoVotantes\InfoVotantes.exe"
@@ -18,6 +23,31 @@ def get_app_dir():
     if getattr(sys, "frozen", False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
+
+def load_screen_region_from_config():
+    """
+    Load screen region coordinates from config.ini if it exists.
+    Returns tuple (x, y, width, height) or None if not found.
+    """
+    config_file = os.path.join(get_app_dir(), "config.ini")
+    
+    if not os.path.exists(config_file):
+        return None
+    
+    try:
+        config = configparser.ConfigParser()
+        config.read(config_file)
+        
+        if 'SCREEN_REGION' in config:
+            x = int(config['SCREEN_REGION']['x'])
+            y = int(config['SCREEN_REGION']['y'])
+            width = int(config['SCREEN_REGION']['width'])
+            height = int(config['SCREEN_REGION']['height'])
+            return (x, y, width, height)
+    except Exception as e:
+        print(f"Warning: Could not read config.ini: {e}")
+    
+    return None
 
 # Configure logging - output to both console and file
 LOG_FILE_PATH = os.path.join(get_app_dir(), f"infovotantes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
@@ -47,7 +77,16 @@ EXCEL_FILE_PATH = os.path.join(get_app_dir(), "InfoVotantes.xlsx")
 CEDULA = "1117512408"
 
 # Region coordinates for the result area (x, y, width, height)
-RESULT_REGION = (932, 334, 305, 314)
+# Try to load from config.ini first, otherwise use default
+config_region = load_screen_region_from_config()
+if config_region:
+    RESULT_REGION = config_region
+    logger.info(f"Loaded screen region from config.ini: {RESULT_REGION}")
+else:
+    RESULT_REGION = (932, 334, 305, 314)
+    logger.info(f"Using default screen region: {RESULT_REGION}")
+    logger.info("Run getwindow.py to configure for this computer's screen")
+
 # Extra pixels around the result area to avoid clipping
 REGION_PADDING = 0
 
