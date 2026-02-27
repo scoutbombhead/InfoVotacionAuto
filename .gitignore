@@ -1,0 +1,30 @@
+# IDE and Editor
+.idea/
+
+# Build artifacts
+build/
+
+# Log files
+*.log
+
+# PyInstaller spec files
+*.spec
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# IDE
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
